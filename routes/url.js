@@ -71,7 +71,7 @@ router.post("/shorten", authMiddleware, createLimiter, async (req, res) => {
   }
 });
 
-router.get("/:alias", async (req, res) => {
+router.get("/:alias", authMiddleware, async (req, res) => {
   try {
     const { alias } = req.params;
     const shortUrl = await ShortUrl.findOne({ shortCode: alias });
@@ -116,7 +116,7 @@ router.get("/:alias", async (req, res) => {
   }
 });
 
-router.get("/analytics/:alias", async (req, res) => {
+router.get("/analytics/:alias", authMiddleware, async (req, res) => {
   try {
     const { alias } = req.params;
     const shortUrl = await ShortUrl.findOne({ shortCode: alias });
