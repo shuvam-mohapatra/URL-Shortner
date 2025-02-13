@@ -4,12 +4,16 @@ const authRoutes = require("./routes/auth");
 const shortner = require("./routes/url");
 const cors = require("cors");
 require("dotenv").config();
+const setupSwagger = require("./swagger");
 
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(cors());
+
+// Swagger
+setupSwagger(app);
 
 // Routes
 app.use("/api/auth", authRoutes);
