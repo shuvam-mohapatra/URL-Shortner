@@ -199,7 +199,7 @@ router.get("/analytics/:alias", authMiddleware, async (req, res) => {
 });
 
 //  Get Topic-Based Analytics API
-router.get("/analytics/topic/:topic", async (req, res) => {
+router.get("/analytics/topic/:topic", authMiddleware, async (req, res) => {
   try {
     const { topic } = req.params;
 
@@ -252,6 +252,87 @@ router.get("/analytics/topic/:topic", async (req, res) => {
     res.json(response);
   } catch (error) {
     console.error("Topic Analytics Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+//  Get Overall Analytics API
+router.get("/overall/analytics", authMiddleware, async (req, res) => {
+  try {
+    // console.log("entry");
+
+    const userId = req.user.userId;
+
+    //  Find all URLs created by the authenticated user
+    const urls = await ShortUrl.find({ createdBy: userId });
+    // console.log(urls);
+
+    if (urls.length === 0) {
+      return res.status(404).json({ error: "No URLs found for this user" });
+    }
+
+    let totalClicks = 0;
+    let uniqueUsersSet = new Set();
+    let clicksByDate = {};
+    let osStats = {};
+    let deviceStats = {};
+
+    urls.forEach((url) => {
+      let uniqueUsersForUrl = new Set();
+
+      url.analytics.forEach((entry) => {
+        totalClicks++;
+
+        //  Track unique users
+        uniqueUsersSet.add(entry.ipAddress);
+        uniqueUsersForUrl.add(entry.ipAddress);
+
+        //  Track clicks by date
+        const date = entry.timestamp.toISOString().split("T")[0];
+        clicksByDate[date] = (clicksByDate[date] || 0) + 1;
+
+        //  Track OS type
+        const osName = entry.os || "Unknown";
+        if (!osStats[osName]) {
+          osStats[osName] = { uniqueClicks: 0, uniqueUsers: new Set() };
+        }
+        osStats[osName].uniqueClicks += 1;
+        osStats[osName].uniqueUsers.add(entry.ipAddress);
+
+        //  Track device type
+        const deviceName = entry.device || "Unknown";
+        if (!deviceStats[deviceName]) {
+          deviceStats[deviceName] = { uniqueClicks: 0, uniqueUsers: new Set() };
+        }
+        deviceStats[deviceName].uniqueClicks += 1;
+        deviceStats[deviceName].uniqueUsers.add(entry.ipAddress);
+      });
+    });
+
+    //  Format response
+    const response = {
+      totalUrls: urls.length,
+      totalClicks,
+      uniqueUsers: uniqueUsersSet.size,
+      clicksByDate: Object.entries(clicksByDate).map(([date, clicks]) => ({
+        date,
+        clicks,
+      })),
+      osType: Object.entries(osStats).map(([osName, stats]) => ({
+        osName,
+        uniqueClicks: stats.uniqueClicks,
+        uniqueUsers: stats.uniqueUsers.size,
+      })),
+      deviceType: Object.entries(deviceStats).map(([deviceName, stats]) => ({
+        deviceName,
+        uniqueClicks: stats.uniqueClicks,
+        uniqueUsers: stats.uniqueUsers.size,
+      })),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Overall Analytics Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
