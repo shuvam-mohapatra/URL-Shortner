@@ -198,4 +198,62 @@ router.get("/analytics/:alias", authMiddleware, async (req, res) => {
   }
 });
 
+//  Get Topic-Based Analytics API
+router.get("/analytics/topic/:topic", async (req, res) => {
+  try {
+    const { topic } = req.params;
+
+    //  Find all URLs with the specified topic
+    const urls = await ShortUrl.find({ topic });
+
+    if (urls.length === 0) {
+      return res.status(404).json({ error: "No URLs found for this topic" });
+    }
+
+    let totalClicks = 0;
+    let uniqueUsersSet = new Set();
+    let clicksByDate = {};
+    let urlStats = [];
+
+    urls.forEach((url) => {
+      let uniqueUsersForUrl = new Set();
+
+      url.analytics.forEach((entry) => {
+        totalClicks++;
+
+        //  Collect unique users
+        uniqueUsersSet.add(entry.ipAddress);
+        uniqueUsersForUrl.add(entry.ipAddress);
+
+        //  Group clicks by date
+        const date = entry.timestamp.toISOString().split("T")[0];
+        clicksByDate[date] = (clicksByDate[date] || 0) + 1;
+      });
+
+      //  Store individual URL stats
+      urlStats.push({
+        shortUrl: url.shortUrl,
+        totalClicks: url.analytics.length,
+        uniqueUsers: uniqueUsersForUrl.size,
+      });
+    });
+
+    //  Format response
+    const response = {
+      totalClicks,
+      uniqueUsers: uniqueUsersSet.size,
+      clicksByDate: Object.entries(clicksByDate).map(([date, clicks]) => ({
+        date,
+        clicks,
+      })),
+      urls: urlStats,
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Topic Analytics Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 module.exports = router;
