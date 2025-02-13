@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit");
 const ShortUrl = require("../models/ShortUrl");
 const authMiddleware = require("../middleware/auth");
 const UAParser = require("ua-parser-js");
+const redisClient = require("../redisClient");
 
 const uid = new ShortUniqueId({ length: 6 }); // Generate unique short codes
 
@@ -74,11 +75,23 @@ router.post("/shorten", authMiddleware, createLimiter, async (req, res) => {
 router.get("/:alias", authMiddleware, async (req, res) => {
   try {
     const { alias } = req.params;
+
+    // Check Redis first
+    const cachedLongUrl = await redisClient.get(`shortUrl:${alias}`);
+    if (cachedLongUrl) {
+      console.log("Cache hit! Redirecting...");
+      return res.redirect(cachedLongUrl);
+    }
+
+    // Not found in cache, fetch from DB
     const shortUrl = await ShortUrl.findOne({ shortCode: alias });
 
     if (!shortUrl) {
       return res.status(404).json({ error: "Short URL not found" });
     }
+
+    // Cache the result
+    await redisClient.setEx(`shortUrl:${shortCode}`, 3600, urlDoc.longUrl); // Cache for 1 hour
 
     // Extract user agent details
     const userAgent = req.headers["user-agent"];
@@ -262,6 +275,14 @@ router.get("/overall/analytics", authMiddleware, async (req, res) => {
     // console.log("entry");
 
     const userId = req.user.userId;
+    const cacheKey = `analytics:${userId}`;
+
+    // Check Redis cache first
+    const cachedAnalytics = await redisClient.get(cacheKey);
+    if (cachedAnalytics) {
+      console.log("Serving analytics from cache!");
+      return res.json(JSON.parse(cachedAnalytics));
+    }
 
     //  Find all URLs created by the authenticated user
     const urls = await ShortUrl.find({ createdBy: userId });
@@ -329,6 +350,9 @@ router.get("/overall/analytics", authMiddleware, async (req, res) => {
         uniqueUsers: stats.uniqueUsers.size,
       })),
     };
+
+    // Cache the analytics response for 5 minutes (300 seconds)
+    await redisClient.setEx(cacheKey, 300, JSON.stringify(response));
 
     res.json(response);
   } catch (error) {

@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.10.0",
     "nodemon": "^3.1.9",
+    "redis": "^4.7.0",
     "short-unique-id": "^5.2.0",
     "ua-parser-js": "^2.0.2"
   }
