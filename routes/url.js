@@ -12,13 +12,15 @@ const uid = new ShortUniqueId({ length: 6 }); // Generate unique short codes
 // Rate Limiting: Allow 5 URL creations per hour per user
 const createLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
+  max: 500,
   message: { error: "Rate limit exceeded. Try again later." },
   keyGenerator: (req) => req.user.userId, // Limit per user
 });
 
 // Shorten URL API
 router.post("/shorten", authMiddleware, createLimiter, async (req, res) => {
+  console.log("entry");
+
   try {
     const { longUrl, customAlias, topic } = req.body;
     const userId = req.user.userId;
@@ -49,6 +51,7 @@ router.post("/shorten", authMiddleware, createLimiter, async (req, res) => {
     }
 
     let shortUrl = `${process.env.BASE_URL}/${shortCode}`;
+    console.log(shortUrl);
 
     // Save to MongoDB
     const newShortUrl = new ShortUrl({
@@ -91,7 +94,7 @@ router.get("/:alias", authMiddleware, async (req, res) => {
     }
 
     // Cache the result
-    await redisClient.setEx(`shortUrl:${shortCode}`, 3600, urlDoc.longUrl); // Cache for 1 hour
+    await redisClient.setEx(`shortUrl:${alias}`, 3600, shortUrl.longUrl); // Cache for 1 hour
 
     // Extract user agent details
     const userAgent = req.headers["user-agent"];
